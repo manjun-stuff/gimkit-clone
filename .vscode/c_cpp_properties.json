@@ -1,14 +1,18 @@
 {
     "configurations": [
         {
-            "name": "Mac",
+            "name": "Emscripten-Full-Fix",
             "includePath": [
-                "${workspaceFolder}/../Desktop/emsdk/upstream/emscripten/cache/sysroot/include"
+                "${workspaceFolder}/**",
+                "/Users/minjun/Desktop/emsdk/upstream/emscripten/cache/sysroot/include",
+                "/Users/minjun/Desktop/emsdk/upstream/emscripten/cache/sysroot/include/emscripten"
             ],
-            "defines": [],
-            "compilerPath": "/usr/bin/clang",
+            "defines": [
+                "EMSCRIPTEN=1"
+            ],
+            "compilerPath": "/usr/bin/clang++",
             "cStandard": "c17",
-            "cppStandard": "c++14",
+            "cppStandard": "c++17",
             "intelliSenseMode": "macos-clang-arm64"
         }
     ],
