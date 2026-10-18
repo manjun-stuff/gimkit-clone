@@ -1,0 +1,3 @@
+If you look at this and think about how unoptimized or unclear or anything about how this is, that's justified. This is my first ever project with SDL (not counting pygame) and I don't have much experience with C++ either.
+I just started this to have some fun and try out something new and get to know a new language. This is NOT made by a guy who knows his C++. This is built by a random guy who wanted to try SDL and make a web app with it.
+A LOT of the things here are my first time doing them, and this is also my first time using Github, too. So, almost every single thought about any bad parts of this are probably true.
