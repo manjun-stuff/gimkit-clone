@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Gimkit Clone</title>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* The viewport completely expands to match any monitor or browser size */
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            outline: none;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="fps-counter" style="
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: #00ff00;
+        font-family: monospace;
+        font-size: 16px;
+        border-radius: 4px;
+        z-index: 100;
+        pointer-events: none;
+        border: 1px solid #00ff00;
+        padding: 6px 10px;
+    ">FPS: --</div>
+
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+
+    <script type='text/javascript'>
+        var Module = {
+            requestPointerLock: function () { },
+            canvas: (function () {
+                return document.getElementById('canvas');
+            })()
+        };
+    </script>
+    {{{ SCRIPT }}}
+    <script>
+        (function () {
+            const fpsDisplay = document.getElementById('fps-counter');
+            let lastCalledTime = performance.now();
+            let fpsQueue = [];
+            function updateFPS() {
+                let now = performance.now();
+                let delta = now - lastCalledTime;
+                lastCalledTime = now;
+                let currentFps = 1000 / delta;
+                fpsQueue.push(currentFps);
+                if (fpsQueue.length > 10) fpsQueue.shift();
+                let averageFps = fpsQueue.reduce((a, b) => a + b, 0) / fpsQueue.length;
+                fpsDisplay.innerText = "FPS: " + Math.round(averageFps);
+                requestAnimationFrame(updateFPS);
+            }
+            requestAnimationFrame(updateFPS);
+        })();
+    </script>
+</body>
+
+</html>
