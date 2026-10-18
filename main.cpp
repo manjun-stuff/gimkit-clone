@@ -2,6 +2,8 @@
 #include <emscripten.h>
 #include <iostream>
 
+uint64_t lastTick = 0;
+
 enum GameState
 {
     HOME_SCREEN,
@@ -86,6 +88,10 @@ void render_frame(AppData *app)
 // executes functions for game every frame
 void tick(void *arg)
 {
+    uint64_t currentTick = SDL_GetTicks64();
+    uint64_t deltaTime = currentTick - lastTick;
+    lastTick = currentTick;
+
     // get the data for our application
     AppData *app = static_cast<AppData *>(arg);
     // check our events
