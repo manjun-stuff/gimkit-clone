@@ -1,6 +1,5 @@
 #include <SDL2/SDL.h>
 #include <emscripten.h>
-#include <iostream>
 #include <algorithm>
 
 uint64_t lastTick = 0;
@@ -13,11 +12,21 @@ enum GameState
     SHOP
 };
 
+struct Box
+{
+    float x;
+    float y;
+    float width;
+    float height;
+};
+
 struct AppData
 {
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
     GameState currentGameState = PLAYING;
+    Box platform = {0, 0.5f, 1, 0.1f};
+    float gravity = 2.5f;
     float camX = 0;
     float camY = 0;
     int playerMoney = 0;
@@ -25,8 +34,8 @@ struct AppData
     float playerY = 0;
     float velocityX = 0;
     float velocityY = 0;
-    float playerWidth = 0.05f;
-    float playerHeight = 0.1f;
+    float playerWidth = 0.1f;
+    float playerHeight = 0.2f;
     float playerSpeed = 5;
     bool running = true;
 };
@@ -37,12 +46,12 @@ struct Vector2
     float y;
 };
 
-bool aabb_circle(Vector2 pos, Vector2 size, Vector2 circleCenter, float circleRadius)
+bool aabb_circle(Box box, Vector2 circleCenter, float circleRadius)
 {
     // localize coords so boxcenter is at 0, 0
-    Vector2 localCircle = {circleCenter.x - pos.x, circleCenter.y - pos.y};
+    Vector2 localCircle = {circleCenter.x - box.x, circleCenter.y - box.y};
     // rotate the circle coords so the box is axis aligned
-    Vector2 clampedCircle = {std::clamp(localCircle.x, -size.x / 2, size.x / 2), std::clamp(localCircle.y, -size.y / 2, size.y / 2)};
+    Vector2 clampedCircle = {std::clamp(localCircle.x, -box.width / 2, box.width / 2), std::clamp(localCircle.y, -box.height / 2, box.height / 2)};
 
     if (std::hypot(clampedCircle.x - localCircle.x, clampedCircle.y - localCircle.y) < circleRadius)
     {
@@ -51,32 +60,70 @@ bool aabb_circle(Vector2 pos, Vector2 size, Vector2 circleCenter, float circleRa
     return false;
 }
 
-bool bounding_box(Vector2 a1, Vector2 a2, Vector2 a3, Vector2 a4, Vector2 b1, Vector2 b2, Vector2 b3, Vector2 b4)
+bool bounding_box(Box box1, Box box2)
 {
-    // obb collision detection, can't do simple AABB because the boxes are rotated, also can't simply check corners because of rotation and collisions that dont involve corners, so i have to result to some complex math.
+    // aabb collision detection
+    float xMin = box1.width / 2 + box2.width / 2;
+    float yMin = box1.height / 2 + box2.height / 2;
+    if (std::abs(box1.x - box2.x) < xMin && std::abs(box1.y - box2.y) < yMin)
+    {
+        return true;
+    }
     return false;
 }
 
-void draw_box(Vector2 uv, Vector2 boxSize, AppData *app, int r, int g, int b)
+Vector2 bounding_box_overlap(Box box1, Box box2)
+{
+    Vector2 overlap;
+    bool right = box2.x > box1.x;
+    bool below = box2.y > box1.y;
+    float xMin1 = box1.x - box1.width / 2;
+    float xMax1 = box1.x + box1.width / 2;
+    float xMin2 = box2.x - box2.width / 2;
+    float xMax2 = box2.x + box2.width / 2;
+    float yMin1 = box1.y - box1.height / 2;
+    float yMax1 = box1.y + box1.height / 2;
+    float yMin2 = box2.y - box2.height / 2;
+    float yMax2 = box2.y + box2.height / 2;
+    if (right)
+    {
+        overlap.x = xMin2 - xMax1;
+    }
+    else
+    {
+        overlap.x = xMax2 - xMin1;
+    }
+    if (below)
+    {
+        overlap.y = yMin2 - yMax1;
+    }
+    else
+    {
+        overlap.y = yMax2 - yMin1;
+    }
+    return overlap;
+}
+
+void draw_box(Box box, AppData *app, int r, int g, int b)
 {
     int width, height;
     SDL_GetWindowSizeInPixels(app->window, &width, &height);
-    int renderWidth = std::round(boxSize.x * width);
-    int renderHeight = std::round(boxSize.y * height);
-    int renderX = std::round(uv.x * width) - (renderWidth / 2);
-    int renderY = std::round(uv.y * height) - (renderHeight / 2);
+    int renderWidth = std::round(box.width * width);
+    int renderHeight = std::round(box.height * height);
+    int renderX = std::round(box.x * width) - (renderWidth / 2);
+    int renderY = std::round(box.y * height) - (renderHeight / 2);
 
-    SDL_Rect box = {renderX, renderY, renderWidth, renderHeight};
+    SDL_Rect rect = {renderX, renderY, renderWidth, renderHeight};
 
     SDL_SetRenderDrawColor(app->renderer, r, g, b, 255);
-    SDL_RenderFillRect(app->renderer, &box);
+    SDL_RenderFillRect(app->renderer, &rect);
 }
 
-void draw_box_world(Vector2 world, Vector2 boxSize, AppData *app, int r, int g, int b)
+void draw_box_world(Box box, AppData *app, int r, int g, int b)
 {
     // subtract cam coords so we can get the camera's viewpoint
-    float localX = world.x - app->camX;
-    float localY = world.y - app->camY;
+    float localX = box.x - app->camX;
+    float localY = box.y - app->camY;
 
     // acquire aspect ratio
     int width, height;
@@ -91,13 +138,14 @@ void draw_box_world(Vector2 world, Vector2 boxSize, AppData *app, int r, int g, 
     // modify the local y position so it expands to screen
     pixel.y = localY * height;
 
-    Vector2 uv = {pixel.x / width + 0.5f, pixel.y / height + 0.5f};
+    box.x = pixel.x / width + 0.5f;
+    box.y = pixel.y / height + 0.5f;
 
     // modify box size x to fit
-    boxSize.x = boxSize.x * static_cast<float>(height) / width;
+    box.width = box.width * static_cast<float>(height) / width;
 
     // render
-    draw_box(uv, boxSize, app, r, g, b);
+    draw_box(box, app, r, g, b);
 }
 
 void render_frame(AppData *app)
@@ -105,16 +153,52 @@ void render_frame(AppData *app)
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
 
-    draw_box_world(Vector2{0.0f, 0.0f}, Vector2{1.0f, 1.0f}, app, 255, 0, 0);
+    // render player
+    draw_box_world(Box{app->playerX, app->playerY, app->playerWidth, app->playerHeight}, app, 255, 0, 0);
+
+    // render platform
+    draw_box_world(app->platform, app, 255, 255, 255);
 
     SDL_RenderPresent(app->renderer);
+}
+
+void run_physics(AppData *app, float deltaTime)
+{
+    // apply gravity
+    app->velocityY += app->gravity * deltaTime;
+
+    // update player position
+    app->playerX += app->velocityX * deltaTime;
+    Box playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
+    if (bounding_box(playerBox, app->platform))
+    {
+        Vector2 overlap = bounding_box_overlap(playerBox, app->platform);
+        // deal with collision using overlap vector
+        app->playerX += overlap.x;
+        app->velocityX = 0;
+    }
+    app->playerY += app->velocityY * deltaTime;
+    playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
+    if (bounding_box(playerBox, app->platform))
+    {
+        Vector2 overlap = bounding_box_overlap(playerBox, app->platform);
+        // deal with collision using overlap vector
+        app->playerY += overlap.y;
+        app->velocityY = 0;
+    }
+    app->velocityX *= 0.95f; // apply friction x
+    app->velocityY *= 0.95f; // apply friction y
+}
+
+void handle_inputs(AppData *app)
+{
 }
 
 // executes functions for game every frame
 void tick(void *arg)
 {
     uint64_t currentTick = SDL_GetTicks64();
-    uint64_t deltaTime = currentTick - lastTick;
+    float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
 
     // get the data for our application
@@ -131,6 +215,8 @@ void tick(void *arg)
         }
     }
 
+    handle_inputs(app);
+    run_physics(app, deltaTime);
     render_frame(app);
 }
 
