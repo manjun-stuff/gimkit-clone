@@ -36,8 +36,10 @@ struct AppData
     float velocityY = 0;
     float playerWidth = 0.1f;
     float playerHeight = 0.2f;
-    float playerSpeed = 5;
+    float playerSpeed = 7.5f;
+    float playerJumpHeight = 1.5f;
     bool running = true;
+    bool onGround = false;
 };
 
 struct Vector2
@@ -164,6 +166,7 @@ void render_frame(AppData *app)
 
 void run_physics(AppData *app, float deltaTime)
 {
+    app->onGround = false;
     // apply gravity
     app->velocityY += app->gravity * deltaTime;
 
@@ -181,17 +184,25 @@ void run_physics(AppData *app, float deltaTime)
     playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
     if (bounding_box(playerBox, app->platform))
     {
+        app->onGround = true;
         Vector2 overlap = bounding_box_overlap(playerBox, app->platform);
         // deal with collision using overlap vector
         app->playerY += overlap.y;
         app->velocityY = 0;
     }
-    app->velocityX *= 0.95f; // apply friction x
-    app->velocityY *= 0.95f; // apply friction y
+    app->velocityX *= 0.8f;   // apply friction x
+    app->velocityY *= 0.975f; // apply friction y
 }
 
-void handle_inputs(AppData *app)
+void handle_inputs(AppData *app, float deltaTime)
 {
+    const uint8_t *keystate = SDL_GetKeyboardState(nullptr);
+    // bulletproof, branching-free momentum acceleration
+    app->velocityX += ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) - (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) * app->playerSpeed * deltaTime;
+    if ((keystate[SDL_SCANCODE_W] || keystate[SDL_SCANCODE_UP]) && app->onGround)
+    {
+        app->velocityY -= app->playerJumpHeight;
+    }
 }
 
 // executes functions for game every frame
@@ -215,8 +226,11 @@ void tick(void *arg)
         }
     }
 
-    handle_inputs(app);
+    handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
+    // let camera catch up
+    app->camX += (app->playerX - app->camX) * 5 * deltaTime;
+    app->camY += (app->playerY - app->camY) * 5 * deltaTime;
     render_frame(app);
 }
 
