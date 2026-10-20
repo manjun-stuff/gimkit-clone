@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include <emscripten.h>
 #include <algorithm>
+#include <vector>
 
 uint64_t lastTick = 0;
 
@@ -25,7 +26,7 @@ struct AppData
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
     GameState currentGameState = PLAYING;
-    Box platform = {0, 0.5f, 1, 0.1f};
+    std::vector<Box> platforms = {{0, 0.5f, 1, 0.1f}};
     float gravity = 2.5f;
     float camX = 0;
     float camY = 0;
@@ -38,8 +39,20 @@ struct AppData
     float playerHeight = 0.2f;
     float playerSpeed = 7.5f;
     float playerJumpHeight = 1.5f;
+    float maxRunSpeed = 7.5f;
     bool running = true;
     bool onGround = false;
+};
+
+class World
+{
+public:
+    std::vector<Box> platforms;
+
+    void Load(AppData *app)
+    {
+        app->platforms = platforms;
+    }
 };
 
 struct Vector2
@@ -159,7 +172,8 @@ void render_frame(AppData *app)
     draw_box_world(Box{app->playerX, app->playerY, app->playerWidth, app->playerHeight}, app, 255, 0, 0);
 
     // render platform
-    draw_box_world(app->platform, app, 255, 255, 255);
+    for (Box platform : app->platforms)
+        draw_box_world(platform, app, 255, 255, 255);
 
     SDL_RenderPresent(app->renderer);
 }
@@ -167,31 +181,45 @@ void render_frame(AppData *app)
 void run_physics(AppData *app, float deltaTime)
 {
     app->onGround = false;
-    // apply gravity
+
+    // Apply environmental gravity once per frame
     app->velocityY += app->gravity * deltaTime;
 
-    // update player position
-    app->playerX += app->velocityX * deltaTime;
-    Box playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
-    if (bounding_box(playerBox, app->platform))
+    // --- 1. RESOLVE HORIZONTAL AXIS ---
+    app->playerX += app->velocityX * deltaTime; // Move once
+
+    // Check horizontal collisions against ALL platforms defensively
+    for (const Box &platform : app->platforms)
     {
-        Vector2 overlap = bounding_box_overlap(playerBox, app->platform);
-        // deal with collision using overlap vector
-        app->playerX += overlap.x;
-        app->velocityX = 0;
+        Box playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
+        if (bounding_box(playerBox, platform))
+        {
+            Vector2 overlap = bounding_box_overlap(playerBox, platform);
+            app->playerX += overlap.x;
+            app->velocityX = 0;
+        }
     }
-    app->playerY += app->velocityY * deltaTime;
-    playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
-    if (bounding_box(playerBox, app->platform))
+
+    // --- 2. RESOLVE VERTICAL AXIS ---
+    app->playerY += app->velocityY * deltaTime; // Move once
+
+    // Check vertical collisions against ALL platforms defensively
+    for (const Box &platform : app->platforms)
     {
-        app->onGround = true;
-        Vector2 overlap = bounding_box_overlap(playerBox, app->platform);
-        // deal with collision using overlap vector
-        app->playerY += overlap.y;
-        app->velocityY = 0;
+        Box playerBox = {app->playerX, app->playerY, app->playerWidth, app->playerHeight};
+        if (bounding_box(playerBox, platform))
+        {
+            Vector2 overlap = bounding_box_overlap(playerBox, platform);
+            app->playerY += overlap.y;
+            app->velocityY = 0;
+            app->onGround = true; // True if resting on at least one platform
+        }
     }
-    app->velocityX *= 0.8f;   // apply friction x
-    app->velocityY *= 0.975f; // apply friction y
+
+    // --- 3. APPLY SINGLE-FRAME FRICTION & LIMITERS ---
+    app->velocityX -= (app->velocityX * 8.0f) * deltaTime;
+    app->velocityX = std::clamp(app->velocityX, -app->maxRunSpeed, app->maxRunSpeed);
+    app->velocityY -= (app->velocityY * 1.0f) * deltaTime;
 }
 
 void handle_inputs(AppData *app, float deltaTime)
@@ -199,7 +227,7 @@ void handle_inputs(AppData *app, float deltaTime)
     const uint8_t *keystate = SDL_GetKeyboardState(nullptr);
     // bulletproof, branching-free momentum acceleration
     app->velocityX += ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) - (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) * app->playerSpeed * deltaTime;
-    if ((keystate[SDL_SCANCODE_W] || keystate[SDL_SCANCODE_UP]) && app->onGround)
+    if ((keystate[SDL_SCANCODE_W] || keystate[SDL_SCANCODE_UP] || keystate[SDL_SCANCODE_SPACE]) && app->onGround)
     {
         app->velocityY -= app->playerJumpHeight;
     }
@@ -229,8 +257,8 @@ void tick(void *arg)
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
     // let camera catch up
-    app->camX += (app->playerX - app->camX) * 5 * deltaTime;
-    app->camY += (app->playerY - app->camY) * 5 * deltaTime;
+    app->camX += (app->playerX - app->camX) * 6.5f * deltaTime;
+    app->camY += (app->playerY - app->camY) * 6.5f * deltaTime;
     render_frame(app);
 }
 
@@ -241,6 +269,11 @@ int main()
     // creates the game window and renderer
     app.window = SDL_CreateWindow("Gamkat", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     app.renderer = SDL_CreateRenderer(app.window, -1, SDL_RENDERER_ACCELERATED);
+
+    // make a basic world
+    World basicWorld;
+    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {1.1f, 0.4f, 1, 0.1f}};
+    basicWorld.Load(&app);
 
     emscripten_set_main_loop_arg(tick, &app, 0, true);
 
