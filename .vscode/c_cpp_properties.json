@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "Emscripten-Full-Fix",
+            "name": "Emscripten-SDL Env",
             "includePath": [
                 "${workspaceFolder}/**",
                 "/Users/minjun/Desktop/emsdk/upstream/emscripten/cache/sysroot/include",

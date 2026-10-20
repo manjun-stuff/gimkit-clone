@@ -39,9 +39,11 @@ struct AppData
     float playerHeight = 0.2f;
     float playerSpeed = 7.5f;
     float playerJumpHeight = 1.5f;
-    float maxRunSpeed = 7.5f;
+    float maxRunSpeed = 5;
     bool running = true;
     bool onGround = false;
+    bool jumpKeyWasPressed = false;
+    int jumpsRemaining = 2;
 };
 
 class World
@@ -225,23 +227,45 @@ void run_physics(AppData *app, float deltaTime)
 void handle_inputs(AppData *app, float deltaTime)
 {
     const uint8_t *keystate = SDL_GetKeyboardState(nullptr);
-    // bulletproof, branching-free momentum acceleration
-    app->velocityX += ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) - (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) * app->playerSpeed * deltaTime;
-    if ((keystate[SDL_SCANCODE_W] || keystate[SDL_SCANCODE_UP] || keystate[SDL_SCANCODE_SPACE]) && app->onGround)
+
+    app->velocityX += ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) -
+                       (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) *
+                      app->playerSpeed * deltaTime;
+
+    bool jumpKeyPressed =
+        keystate[SDL_SCANCODE_W] ||
+        keystate[SDL_SCANCODE_UP] ||
+        keystate[SDL_SCANCODE_SPACE];
+
+    if (app->onGround)
     {
-        app->velocityY -= app->playerJumpHeight;
+        app->jumpsRemaining = 2;
     }
+    else if (app->jumpsRemaining > 1)
+    {
+        app->jumpsRemaining = 1;
+    }
+
+    // Detect a new press, not a held key
+    if (jumpKeyPressed && !app->jumpKeyWasPressed)
+    {
+        if (app->jumpsRemaining > 0)
+        {
+            app->velocityY = -app->playerJumpHeight;
+            app->jumpsRemaining--;
+        }
+    }
+
+    app->jumpKeyWasPressed = jumpKeyPressed;
 }
 
 // executes functions for game every frame
-void tick(void *arg)
+void game_tick(AppData *app)
 {
     uint64_t currentTick = SDL_GetTicks64();
     float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
 
-    // get the data for our application
-    AppData *app = static_cast<AppData *>(arg);
     // check our events
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -256,10 +280,23 @@ void tick(void *arg)
 
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
+    // detect player death
+    if (app->playerY > 2)
+    {
+        // implement checkpoint code later, maybe add a force death
+        app->playerX = 0;
+        app->playerY = 0;
+    }
     // let camera catch up
     app->camX += (app->playerX - app->camX) * 6.5f * deltaTime;
     app->camY += (app->playerY - app->camY) * 6.5f * deltaTime;
     render_frame(app);
+}
+
+void tick(void *arg)
+{
+    AppData *app = static_cast<AppData *>(arg);
+    game_tick(app);
 }
 
 int main()
@@ -272,7 +309,7 @@ int main()
 
     // make a basic world
     World basicWorld;
-    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {1.1f, 0.4f, 1, 0.1f}};
+    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {1.25f, 0.4f, 0.25f, 0.1f}};
     basicWorld.Load(&app);
 
     emscripten_set_main_loop_arg(tick, &app, 0, true);
