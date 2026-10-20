@@ -265,6 +265,8 @@ void game_tick(AppData *app)
     uint64_t currentTick = SDL_GetTicks64();
     float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
+    // cap deltatime to prevent outrageous valuess
+    deltaTime = std::min(deltaTime, 0.05f);
 
     // check our events
     SDL_Event event;
