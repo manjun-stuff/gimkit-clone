@@ -10,7 +10,8 @@ enum GameState
     HOME_SCREEN,
     PLAYING,
     QUESTIONS,
-    SHOP
+    SHOP,
+    GAME_END
 };
 
 struct Box
