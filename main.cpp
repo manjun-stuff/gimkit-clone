@@ -44,6 +44,10 @@ struct AppData
     bool onGround = false;
     bool jumpKeyWasPressed = false;
     int jumpsRemaining = 2;
+    float maxFallSpeed = 1;
+    std::vector<float> checkpointX = {0};
+    std::vector<float> checkpointY = {0};
+    int checkpointIndex = 0;
 };
 
 class World
@@ -51,9 +55,21 @@ class World
 public:
     std::vector<Box> platforms;
 
+    float spawnX = 0;
+    float spawnY = 0;
+
+    std::vector<float> checkpointsX = {0};
+    std::vector<float> checkpointsY = {0};
+
     void Load(AppData *app)
     {
         app->platforms = platforms;
+        app->playerX = spawnX;
+        app->playerY = spawnY;
+        app->camX = spawnX;
+        app->camY = spawnY;
+        app->checkpointX = checkpointsX;
+        app->checkpointY = checkpointsY;
     }
 };
 
@@ -213,8 +229,11 @@ void run_physics(AppData *app, float deltaTime)
         {
             Vector2 overlap = bounding_box_overlap(playerBox, platform);
             app->playerY += overlap.y;
+            if (app->velocityY > 0) // makes sure it's the ground, not ceiling
+            {
+                app->onGround = true;
+            }
             app->velocityY = 0;
-            app->onGround = true; // True if resting on at least one platform
         }
     }
 
@@ -222,6 +241,7 @@ void run_physics(AppData *app, float deltaTime)
     app->velocityX -= (app->velocityX * 8.0f) * deltaTime;
     app->velocityX = std::clamp(app->velocityX, -app->maxRunSpeed, app->maxRunSpeed);
     app->velocityY -= (app->velocityY * 1.0f) * deltaTime;
+    app->velocityY = std::clamp(app->velocityY, -2.5f, app->maxFallSpeed);
 }
 
 void handle_inputs(AppData *app, float deltaTime)
@@ -283,22 +303,26 @@ void game_tick(AppData *app)
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
     // detect player death
-    if (app->playerY > 2)
+    if (app->playerY > app->checkpointY[app->checkpointIndex] + 1)
     {
         // implement checkpoint code later, maybe add a force death
-        app->playerX = 0;
-        app->playerY = 0;
+        app->playerX = app->checkpointX[app->checkpointIndex];
+        app->playerY = app->checkpointY[app->checkpointIndex];
     }
     // let camera catch up
     app->camX += (app->playerX - app->camX) * 6.5f * deltaTime;
     app->camY += (app->playerY - app->camY) * 6.5f * deltaTime;
+    app->camY = std::min(app->camY, app->checkpointY[app->checkpointIndex]);
     render_frame(app);
 }
 
 void tick(void *arg)
 {
     AppData *app = static_cast<AppData *>(arg);
-    game_tick(app);
+    if (app->currentGameState == PLAYING)
+    {
+        game_tick(app);
+    }
 }
 
 int main()
@@ -311,7 +335,9 @@ int main()
 
     // make a basic world
     World basicWorld;
-    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {1.25f, 0.4f, 0.25f, 0.1f}};
+    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {0, 0.495f, 0.4f, 0.1f}, {1.25f, 0.4f, 0.25f, 0.1f}};
+    basicWorld.spawnY = 0.325f;
+    basicWorld.checkpointsY = {0.325f};
     basicWorld.Load(&app);
 
     emscripten_set_main_loop_arg(tick, &app, 0, true);
