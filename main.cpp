@@ -408,7 +408,7 @@ void handle_inputs(AppData *app, float deltaTime)
     app->velocityX += movement;
     if (std::abs(movement) > 0)
     {
-        app->playerEnergy -= 50 * deltaTime;
+        app->playerEnergy -= 5 * deltaTime;
         std::stringstream ss;
         ss << "Energy: " << app->playerEnergy;
         int w;
