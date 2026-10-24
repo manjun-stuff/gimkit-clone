@@ -1,7 +1,12 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_image.h>
+#ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#endif
 #include <algorithm>
 #include <vector>
+#include <sstream>
 
 uint64_t lastTick = 0;
 
@@ -28,7 +33,7 @@ struct AppData
     SDL_Renderer *renderer = nullptr;
     GameState currentGameState = PLAYING;
     std::vector<Box> platforms = {{0, 0.5f, 1, 0.1f}};
-    float gravity = 2.5f;
+    float gravity = 1.95f;
     float camX = 0;
     float camY = 0;
     int playerMoney = 0;
@@ -36,11 +41,11 @@ struct AppData
     float playerY = 0;
     float velocityX = 0;
     float velocityY = 0;
-    float playerWidth = 0.1f;
-    float playerHeight = 0.2f;
-    float playerSpeed = 7.5f;
-    float playerJumpHeight = 1.5f;
-    float maxRunSpeed = 5;
+    float playerWidth = 0.0875f;
+    float playerHeight = 0.175f;
+    float playerSpeed = 6.5f;
+    float playerJumpHeight = 1.05f;
+    float maxRunSpeed = 2.75f;
     bool running = true;
     bool onGround = false;
     bool jumpKeyWasPressed = false;
@@ -49,7 +54,66 @@ struct AppData
     std::vector<float> checkpointX = {0};
     std::vector<float> checkpointY = {0};
     int checkpointIndex = 0;
+    float stepThreshold = 0.01;
+    TTF_Font *font = TTF_OpenFont("OpenSans-SemiBold.ttf", 35);
+    int fps = 60;
 };
+
+class TextElement
+{
+public:
+    TextElement()
+        : font(nullptr), renderer(nullptr),
+          texture(nullptr), rect{0, 0, 0, 0} {}
+    TextElement(TTF_Font *font, SDL_Renderer *renderer)
+        : font(font), renderer(renderer), texture(nullptr), rect{0, 0, 0, 0} {}
+    ~TextElement()
+    {
+        cleanup();
+    }
+
+    void set_text(const std::string &text, SDL_Color color, int x, int y)
+    {
+        cleanup();
+        SDL_Surface *surf = TTF_RenderText_Blended(font, text.c_str(), color);
+        if (!surf)
+            return;
+        texture = SDL_CreateTextureFromSurface(renderer, surf);
+        if (texture)
+        {
+            rect.x = x;
+            rect.y = y;
+            rect.w = surf->w;
+            rect.h = surf->h;
+        }
+        SDL_FreeSurface(surf);
+    }
+
+    void render_text()
+    {
+        if (texture)
+        {
+            SDL_RenderCopy(renderer, texture, nullptr, &rect);
+        }
+    }
+
+private:
+    void cleanup()
+    {
+        if (texture)
+        {
+            SDL_DestroyTexture(texture);
+            texture = nullptr;
+        }
+    }
+
+    TTF_Font *font;
+    SDL_Renderer *renderer;
+    SDL_Texture *texture;
+    SDL_Rect rect;
+};
+
+TextElement fpsCounter;
 
 class World
 {
@@ -153,6 +217,20 @@ void draw_box(Box box, AppData *app, int r, int g, int b)
     SDL_RenderFillRect(app->renderer, &rect);
 }
 
+void draw_texture(Box box, AppData *app, SDL_Texture *texture)
+{
+    int width, height;
+    SDL_GetWindowSizeInPixels(app->window, &width, &height);
+    int renderWidth = std::round(box.width * width);
+    int renderHeight = std::round(box.height * height);
+    int renderX = std::round(box.x * width) - (renderWidth / 2);
+    int renderY = std::round(box.y * height) - (renderHeight / 2);
+
+    SDL_Rect rect = {renderX, renderY, renderWidth, renderHeight};
+
+    SDL_RenderCopy(app->renderer, texture, nullptr, &rect);
+}
+
 void draw_box_world(Box box, AppData *app, int r, int g, int b)
 {
     // subtract cam coords so we can get the camera's viewpoint
@@ -182,6 +260,35 @@ void draw_box_world(Box box, AppData *app, int r, int g, int b)
     draw_box(box, app, r, g, b);
 }
 
+void draw_texture_world(Box box, AppData *app, SDL_Texture *texture)
+{
+    // subtract cam coords so we can get the camera's viewpoint
+    float localX = box.x - app->camX;
+    float localY = box.y - app->camY;
+
+    // acquire aspect ratio
+    int width, height;
+    SDL_GetWindowSizeInPixels(app->window, &width, &height);
+    // float aspect = static_cast<float>(width) / height;
+
+    Vector2 pixel;
+
+    // fix the x coords
+    pixel.x = localX * height;
+
+    // modify the local y position so it expands to screen
+    pixel.y = localY * height;
+
+    box.x = pixel.x / width + 0.5f;
+    box.y = pixel.y / height + 0.5f;
+
+    // modify box size x to fit
+    box.width = box.width * static_cast<float>(height) / width;
+
+    // render
+    draw_texture(box, app, texture);
+}
+
 void render_frame(AppData *app)
 {
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
@@ -193,6 +300,8 @@ void render_frame(AppData *app)
     // render platform
     for (Box platform : app->platforms)
         draw_box_world(platform, app, 255, 255, 255);
+
+    fpsCounter.render_text();
 
     SDL_RenderPresent(app->renderer);
 }
@@ -214,6 +323,11 @@ void run_physics(AppData *app, float deltaTime)
         if (bounding_box(playerBox, platform))
         {
             Vector2 overlap = bounding_box_overlap(playerBox, platform);
+            if (std::abs(overlap.y) <= app->stepThreshold)
+            {
+                app->playerY += overlap.y;
+                continue;
+            }
             app->playerX += overlap.x;
             app->velocityX = 0;
         }
@@ -286,20 +400,15 @@ void game_tick(AppData *app)
     uint64_t currentTick = SDL_GetTicks64();
     float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
+
+    // display fps
+    app->fps = (std::round(1 / deltaTime) + app->fps) / 2;
+    std::stringstream ss;
+    ss << "FPS: " << app->fps;
+    fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255}, 5, 5);
+
     // cap deltatime to prevent outrageous valuess
     deltaTime = std::min(deltaTime, 0.05f);
-
-    // check our events
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        if (event.type == SDL_QUIT)
-        {
-            app->running = false;
-            emscripten_cancel_main_loop();
-            return;
-        }
-    }
 
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
@@ -320,6 +429,19 @@ void game_tick(AppData *app)
 void tick(void *arg)
 {
     AppData *app = static_cast<AppData *>(arg);
+    // check our events
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_QUIT)
+        {
+            app->running = false;
+#ifdef __EMSCRIPTEN__
+            emscripten_cancel_main_loop();
+#endif
+            return;
+        }
+    }
     if (app->currentGameState == PLAYING)
     {
         game_tick(app);
@@ -329,24 +451,41 @@ void tick(void *arg)
 int main()
 {
     SDL_Init(SDL_INIT_VIDEO);
+    TTF_Init();
+    IMG_Init(IMG_INIT_PNG);
+
     AppData app;
     // creates the game window and renderer
     app.window = SDL_CreateWindow("Gamkat", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-    app.renderer = SDL_CreateRenderer(app.window, -1, SDL_RENDERER_ACCELERATED);
+    app.renderer = SDL_CreateRenderer(app.window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     // make a basic world
     World basicWorld;
-    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {0, 0.495f, 0.4f, 0.1f}, {1.25f, 0.4f, 0.25f, 0.1f}};
+    basicWorld.platforms = {{0, 0.5f, 1, 0.1f}, {0, 0.495f, 0.4f, 0.1f}, {1.5f, 0.45f, 1, 0.1f}};
     basicWorld.spawnY = 0.325f;
     basicWorld.checkpointsY = {0.325f};
     basicWorld.Load(&app);
 
+    // make our text element great
+    fpsCounter = TextElement{app.font, app.renderer};
+    fpsCounter.set_text("FPS: --", SDL_Color{255, 255, 255}, 5, 5);
+
+#ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
+#else
+    while (app.running)
+    {
+        tick(&app);
+    }
+#endif
 
     // cleans up data to prevent data leaks
     SDL_DestroyWindow(app.window);
     SDL_DestroyRenderer(app.renderer);
+    TTF_CloseFont(app.font);
     SDL_Quit();
+    TTF_Quit();
+    IMG_Quit();
 
     return 0;
 }
