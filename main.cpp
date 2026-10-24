@@ -56,7 +56,6 @@ struct AppData
     int checkpointIndex = 0;
     float stepThreshold = 0.01;
     TTF_Font *font = TTF_OpenFont("OpenSans-SemiBold.ttf", 35);
-    int fps = 60;
     int frameCount = 0;
     float frameTimer = 0;
     bool showHitboxes = true;
@@ -422,7 +421,6 @@ void game_tick(AppData *app)
     deltaTime = std::min(deltaTime, 0.05f);
 
     // display fps
-    app->fps = std::round(1 / deltaTime);
     if (app->frameTimer >= 0.5f)
     {
         std::stringstream ss;
