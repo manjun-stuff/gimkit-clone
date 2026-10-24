@@ -405,7 +405,7 @@ void game_tick(AppData *app)
     app->fps = (std::round(1 / deltaTime) + app->fps) / 2;
     std::stringstream ss;
     ss << "FPS: " << app->fps;
-    fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255}, 5, 5);
+    fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255, 255}, 5, 5);
 
     // cap deltatime to prevent outrageous valuess
     deltaTime = std::min(deltaTime, 0.05f);
@@ -468,7 +468,7 @@ int main()
 
     // make our text element great
     fpsCounter = TextElement{app.font, app.renderer};
-    fpsCounter.set_text("FPS: --", SDL_Color{255, 255, 255}, 5, 5);
+    fpsCounter.set_text("FPS: --", SDL_Color{255, 255, 255, 255}, 5, 5);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
