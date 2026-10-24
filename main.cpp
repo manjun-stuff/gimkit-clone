@@ -57,6 +57,8 @@ struct AppData
     float stepThreshold = 0.01;
     TTF_Font *font = TTF_OpenFont("OpenSans-SemiBold.ttf", 35);
     int fps = 60;
+    int frameCount = 0;
+    float frameTimer = 0;
     bool showHitboxes = true;
     SDL_Color backgroundColor = SDL_Color{58, 161, 247, 255};
 };
@@ -74,10 +76,18 @@ public:
         cleanup();
     }
 
-    void set_text(const std::string &text, SDL_Color color, int x, int y)
+    void set_text(const std::string &text, SDL_Color color, int x, int y, bool solid = false)
     {
         cleanup();
-        SDL_Surface *surf = TTF_RenderText_Blended(font, text.c_str(), color);
+        SDL_Surface *surf;
+        if (solid)
+        {
+            surf = TTF_RenderText_Solid(font, text.c_str(), color);
+        }
+        else
+        {
+            surf = TTF_RenderText_Blended(font, text.c_str(), color);
+        }
         if (!surf)
             return;
         texture = SDL_CreateTextureFromSurface(renderer, surf);
@@ -406,15 +416,25 @@ void game_tick(AppData *app)
     uint64_t currentTick = SDL_GetTicks64();
     float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
+    app->frameTimer += deltaTime;
 
     // cap deltatime to prevent outrageous valuess
     deltaTime = std::min(deltaTime, 0.05f);
 
     // display fps
-    app->fps = (std::round(1 / deltaTime) + app->fps) / 2;
-    std::stringstream ss;
-    ss << "FPS: " << app->fps;
-    fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255, 255}, 5, 5);
+    app->fps = std::round(1 / deltaTime);
+    if (app->frameTimer >= 0.5f)
+    {
+        std::stringstream ss;
+        ss << "FPS: " << std::round(app->frameCount / app->frameTimer);
+        fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255, 255}, 5, 5);
+        app->frameCount = 0;
+        app->frameTimer = 0;
+    }
+    else
+    {
+        app->frameCount += 1;
+    }
 
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
@@ -474,7 +494,7 @@ int main()
 
     // make our text element great
     fpsCounter = TextElement{app.font, app.renderer};
-    fpsCounter.set_text("FPS: --", SDL_Color{255, 255, 255, 255}, 5, 5);
+    fpsCounter.set_text("FPS: 60", SDL_Color{255, 255, 255, 255}, 5, 5);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
