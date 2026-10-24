@@ -58,6 +58,7 @@ struct AppData
     TTF_Font *font = TTF_OpenFont("OpenSans-SemiBold.ttf", 35);
     int fps = 60;
     bool showHitboxes = true;
+    SDL_Color backgroundColor = SDL_Color{58, 161, 247, 255};
 };
 
 class TextElement
@@ -292,7 +293,8 @@ void draw_texture_world(Box box, AppData *app, SDL_Texture *texture)
 
 void render_frame(AppData *app)
 {
-    SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
+    const SDL_Color &bg = app->backgroundColor;
+    SDL_SetRenderDrawColor(app->renderer, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderClear(app->renderer);
 
     if (app->showHitboxes)
