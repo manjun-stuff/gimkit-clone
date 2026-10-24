@@ -36,7 +36,7 @@ struct AppData
     float gravity = 1.95f;
     float camX = 0;
     float camY = 0;
-    int playerMoney = 0;
+    int playerEnergy = 1000;
     float playerX = 0;
     float playerY = 0;
     float velocityX = 0;
@@ -75,6 +75,13 @@ public:
         cleanup();
     }
 
+    void init(TTF_Font *newFont, SDL_Renderer *newRenderer)
+    {
+        cleanup();
+        font = newFont;
+        renderer = newRenderer;
+    }
+
     void set_text(const std::string &text, SDL_Color color, int x, int y, bool solid = false)
     {
         cleanup();
@@ -100,12 +107,25 @@ public:
         SDL_FreeSurface(surf);
     }
 
+    void set_text_right(const std::string &text, SDL_Color color, int rightEdge, int y, bool solid = false)
+    {
+        set_text(text, color, 0, y, solid);
+
+        if (texture)
+            rect.x = rightEdge - rect.w - 5;
+    }
+
     void render_text()
     {
         if (texture)
         {
             SDL_RenderCopy(renderer, texture, nullptr, &rect);
         }
+    }
+
+    SDL_Rect *get_rect()
+    {
+        return &rect;
     }
 
 private:
@@ -125,6 +145,7 @@ private:
 };
 
 TextElement fpsCounter;
+TextElement energyCounter;
 
 class World
 {
@@ -317,6 +338,7 @@ void render_frame(AppData *app)
     }
 
     fpsCounter.render_text();
+    energyCounter.render_text();
 
     SDL_RenderPresent(app->renderer);
 }
@@ -376,11 +398,23 @@ void run_physics(AppData *app, float deltaTime)
 
 void handle_inputs(AppData *app, float deltaTime)
 {
+    if (app->playerEnergy < 1)
+        return;
     const uint8_t *keystate = SDL_GetKeyboardState(nullptr);
 
-    app->velocityX += ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) -
-                       (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) *
-                      app->playerSpeed * deltaTime;
+    float movement = ((keystate[SDL_SCANCODE_D] || keystate[SDL_SCANCODE_RIGHT]) -
+                      (keystate[SDL_SCANCODE_A] || keystate[SDL_SCANCODE_LEFT])) *
+                     app->playerSpeed * deltaTime;
+    app->velocityX += movement;
+    if (std::abs(movement) > 0)
+    {
+        app->playerEnergy -= 50 * deltaTime;
+        std::stringstream ss;
+        ss << "Energy: " << app->playerEnergy;
+        int w;
+        SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
+        energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
+    }
 
     bool jumpKeyPressed =
         keystate[SDL_SCANCODE_W] ||
@@ -403,6 +437,12 @@ void handle_inputs(AppData *app, float deltaTime)
         {
             app->velocityY = -app->playerJumpHeight;
             app->jumpsRemaining--;
+            app->playerEnergy -= 15;
+            std::stringstream ss;
+            ss << "Energy: " << app->playerEnergy;
+            int w;
+            SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
+            energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
         }
     }
 
@@ -465,6 +505,16 @@ void tick(void *arg)
 #endif
             return;
         }
+        if (event.type == SDL_WINDOWEVENT &&
+            event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED &&
+            app->currentGameState == PLAYING)
+        {
+            std::stringstream ss;
+            ss << "Energy: " << app->playerEnergy;
+            int w;
+            SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
+            energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
+        }
     }
     if (app->currentGameState == PLAYING)
     {
@@ -491,8 +541,13 @@ int main()
     basicWorld.Load(&app);
 
     // make our text element great
-    fpsCounter = TextElement{app.font, app.renderer};
-    fpsCounter.set_text("FPS: 60", SDL_Color{255, 255, 255, 255}, 5, 5);
+    fpsCounter.init(app.font, app.renderer);
+    energyCounter.init(app.font, app.renderer);
+    std::stringstream ss;
+    ss << "Energy: " << app.playerEnergy;
+    int w;
+    SDL_GetWindowSizeInPixels(app.window, &w, nullptr);
+    energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
