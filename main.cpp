@@ -57,6 +57,7 @@ struct AppData
     float stepThreshold = 0.01;
     TTF_Font *font = TTF_OpenFont("OpenSans-SemiBold.ttf", 35);
     int fps = 60;
+    bool showHitboxes = true;
 };
 
 class TextElement
@@ -294,12 +295,15 @@ void render_frame(AppData *app)
     SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
     SDL_RenderClear(app->renderer);
 
-    // render player
-    draw_box_world(Box{app->playerX, app->playerY, app->playerWidth, app->playerHeight}, app, 255, 0, 0);
+    if (app->showHitboxes)
+    {
+        // render player
+        draw_box_world(Box{app->playerX, app->playerY, app->playerWidth, app->playerHeight}, app, 255, 0, 0);
 
-    // render platform
-    for (Box platform : app->platforms)
-        draw_box_world(platform, app, 255, 255, 255);
+        // render platform
+        for (Box platform : app->platforms)
+            draw_box_world(platform, app, 255, 255, 255);
+    }
 
     fpsCounter.render_text();
 
@@ -401,14 +405,14 @@ void game_tick(AppData *app)
     float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
     lastTick = currentTick;
 
+    // cap deltatime to prevent outrageous valuess
+    deltaTime = std::min(deltaTime, 0.05f);
+
     // display fps
     app->fps = (std::round(1 / deltaTime) + app->fps) / 2;
     std::stringstream ss;
     ss << "FPS: " << app->fps;
     fpsCounter.set_text(ss.str(), SDL_Color{255, 255, 255, 255}, 5, 5);
-
-    // cap deltatime to prevent outrageous valuess
-    deltaTime = std::min(deltaTime, 0.05f);
 
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
