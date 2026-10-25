@@ -7,8 +7,11 @@
 #include <algorithm>
 #include <vector>
 #include <sstream>
+#include <iostream>
 
 uint64_t lastTick = 0;
+SDL_Cursor *cursorHand = nullptr;
+SDL_Cursor *cursorPointer = nullptr;
 
 enum GameState
 {
@@ -36,7 +39,7 @@ struct AppData
     float gravity = 1.95f;
     float camX = 0;
     float camY = 0;
-    int playerEnergy = 1000;
+    float playerEnergy = 1500;
     float playerX = 0;
     float playerY = 0;
     float velocityX = 0;
@@ -146,6 +149,90 @@ private:
 
 TextElement fpsCounter;
 TextElement energyCounter;
+
+class Button
+{
+public:
+    bool pressed = false;
+    bool hovering = false;
+    Button()
+        : txt(TextElement{}), renderer(nullptr), rect(SDL_Rect{0, 0, 1, 1}) {}
+
+    Button(TTF_Font *font, SDL_Renderer *renderer)
+        : txt(TextElement{font, renderer}), renderer(renderer), rect(SDL_Rect{0, 0, 1, 1}) {}
+
+    void init(TTF_Font *font, SDL_Renderer *renderer)
+    {
+        cleanup();
+        this->renderer = renderer;
+        txt.init(font, renderer);
+    }
+
+    void set_button(std::string text, SDL_Color color, int _x, int _y, int width, int height)
+    {
+        rect = {
+            rect.x = _x,
+            rect.y = _y,
+            rect.w = width,
+            rect.h = height};
+
+        txt.set_text(text, color, _x + rect.w / 2, _y + rect.h / 2);
+        SDL_Rect *textRect = txt.get_rect();
+        textRect->x -= textRect->w / 2;
+        textRect->y -= textRect->h / 2;
+    }
+
+    void update(float deltaTime)
+    {
+        int mouseX, mouseY;
+        Uint32 mouseButtons = SDL_GetMouseState(&mouseX, &mouseY);
+
+        SDL_Point mouse = {mouseX, mouseY};
+
+        hovering = SDL_PointInRect(&mouse, &rect);
+        pressed =
+            (mouseButtons & SDL_BUTTON(SDL_BUTTON_LEFT)) &&
+            hovering;
+
+        // extra polish
+        if (hovering)
+        {
+            SDL_SetCursor(cursorHand);
+            colorOffset += (-50 - colorOffset) * 7 * deltaTime;
+        }
+        else
+        {
+            SDL_SetCursor(cursorPointer);
+            colorOffset += -colorOffset * 5 * deltaTime;
+        }
+    }
+
+    void render_button()
+    {
+        int intOffset = std::round(colorOffset);
+        SDL_SetRenderDrawColor(
+            renderer,
+            std::clamp(44 + intOffset, 0, 255),
+            std::clamp(187 + intOffset, 0, 255),
+            std::clamp(255 + intOffset, 0, 255),
+            255);
+        SDL_RenderFillRect(renderer, &rect);
+        txt.render_text();
+    }
+
+    void cleanup()
+    {
+        txt.init(nullptr, nullptr);
+    }
+
+private:
+    TextElement txt;
+    SDL_Renderer *renderer;
+    SDL_Rect rect;
+    float colorOffset = 0;
+};
+
+Button questionButton;
 
 class World
 {
@@ -339,6 +426,7 @@ void render_frame(AppData *app)
 
     fpsCounter.render_text();
     energyCounter.render_text();
+    questionButton.render_button();
 
     SDL_RenderPresent(app->renderer);
 }
@@ -408,9 +496,11 @@ void handle_inputs(AppData *app, float deltaTime)
     app->velocityX += movement;
     if (std::abs(movement) > 0)
     {
-        app->playerEnergy -= 5 * deltaTime;
+        app->playerEnergy -= 125 * deltaTime;
+        std::cout << "dt: " << deltaTime
+                  << ", drain: " << 5 * deltaTime << '\n';
         std::stringstream ss;
-        ss << "Energy: " << app->playerEnergy;
+        ss << "Energy: " << static_cast<uint64_t>(std::round(app->playerEnergy));
         int w;
         SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
         energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
@@ -439,7 +529,7 @@ void handle_inputs(AppData *app, float deltaTime)
             app->jumpsRemaining--;
             app->playerEnergy -= 15;
             std::stringstream ss;
-            ss << "Energy: " << app->playerEnergy;
+            ss << "Energy: " << static_cast<uint64_t>(std::round(app->playerEnergy));
             int w;
             SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
             energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
@@ -474,6 +564,15 @@ void game_tick(AppData *app)
         app->frameCount += 1;
     }
 
+    questionButton.update(deltaTime);
+    if (questionButton.pressed)
+    {
+        app->currentGameState = QUESTIONS;
+        SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
+        SDL_RenderClear(app->renderer);
+        SDL_RenderPresent(app->renderer);
+        return;
+    }
     handle_inputs(app, deltaTime);
     run_physics(app, deltaTime);
     // detect player death
@@ -490,6 +589,21 @@ void game_tick(AppData *app)
     render_frame(app);
 }
 
+void shutdown(AppData *app)
+{
+    fpsCounter.init(nullptr, nullptr);
+    energyCounter.init(nullptr, nullptr);
+    questionButton.cleanup();
+    SDL_DestroyRenderer(app->renderer);
+    SDL_DestroyWindow(app->window);
+    TTF_CloseFont(app->font);
+    SDL_FreeCursor(cursorHand);
+    SDL_FreeCursor(cursorPointer);
+    TTF_Quit();
+    IMG_Quit();
+    SDL_Quit();
+}
+
 void tick(void *arg)
 {
     AppData *app = static_cast<AppData *>(arg);
@@ -502,18 +616,20 @@ void tick(void *arg)
             app->running = false;
 #ifdef __EMSCRIPTEN__
             emscripten_cancel_main_loop();
+            shutdown(app);
 #endif
             return;
         }
         if (event.type == SDL_WINDOWEVENT &&
             event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED &&
-            app->currentGameState == PLAYING)
+            app->currentGameState == PLAYING) // reposition the UI elements so it doesn't get cooked
         {
             std::stringstream ss;
             ss << "Energy: " << app->playerEnergy;
-            int w;
-            SDL_GetWindowSizeInPixels(app->window, &w, nullptr);
+            int w, h;
+            SDL_GetWindowSizeInPixels(app->window, &w, &h);
             energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
+            questionButton.set_button("Questions", SDL_Color{255, 255, 255, 255}, 5, h - 68, 200, 63);
         }
     }
     if (app->currentGameState == PLAYING)
@@ -540,14 +656,18 @@ int main()
     basicWorld.checkpointsY = {0.325f};
     basicWorld.Load(&app);
 
-    // make our text element great
+    // initialize UI
+    cursorHand = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+    cursorPointer = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
     fpsCounter.init(app.font, app.renderer);
     energyCounter.init(app.font, app.renderer);
     std::stringstream ss;
     ss << "Energy: " << app.playerEnergy;
-    int w;
-    SDL_GetWindowSizeInPixels(app.window, &w, nullptr);
+    int w, h;
+    SDL_GetWindowSizeInPixels(app.window, &w, &h);
     energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
+    questionButton.init(app.font, app.renderer);
+    questionButton.set_button("Questions", SDL_Color{255, 255, 255, 255}, 5, h - 68, 200, 63);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
@@ -559,12 +679,7 @@ int main()
 #endif
 
     // cleans up data to prevent data leaks
-    SDL_DestroyWindow(app.window);
-    SDL_DestroyRenderer(app.renderer);
-    TTF_CloseFont(app.font);
-    SDL_Quit();
-    TTF_Quit();
-    IMG_Quit();
+    shutdown(&app);
 
     return 0;
 }
