@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <vector>
 #include <sstream>
-#include <iostream>
+#include <random>
+#include <array>
+#include <cmath>
 
 uint64_t lastTick = 0;
 SDL_Cursor *cursorHand = nullptr;
@@ -29,6 +31,57 @@ struct Box
     float width;
     float height;
 };
+
+struct Question
+{
+    Question()
+        : question(""), answers({"", "", "", ""}), correct({}) {}
+
+    Question(std::string _question, std::array<std::string, 4> _answers, std::array<bool, 4> _correct)
+        : question(_question), answers(_answers), correct(_correct) {}
+    std::string question;
+    std::array<std::string, 4> answers;
+    std::array<bool, 4> correct;
+
+    bool operator==(const Question &) const = default;
+};
+
+class Kit
+{
+public:
+    std::vector<Question> questions;
+
+    Question get_random_question()
+    {
+        if (questions.empty())
+            return Question{};
+
+        if (bag.empty())
+            bag = questions;
+        std::uniform_int_distribution range{0, static_cast<int>(bag.size()) - 1};
+        int randomIndex = range(gen);
+        Question choice = bag.at(randomIndex);
+        bag[randomIndex] = bag.back();
+        bag.pop_back();
+        return choice;
+    }
+
+    Kit &operator=(Kit &other)
+    {
+        if (this->questions != other.questions)
+        {
+            other.questions = this->questions;
+        }
+        return *this;
+    }
+
+private:
+    std::vector<Question> bag;
+    std::random_device rd{};
+    std::mt19937 gen{rd()};
+};
+
+Kit basicKit;
 
 struct AppData
 {
@@ -63,6 +116,8 @@ struct AppData
     float frameTimer = 0;
     bool showHitboxes = true;
     SDL_Color backgroundColor = SDL_Color{58, 161, 247, 255};
+    Kit activeKit;
+    Question currentQuestion;
 };
 
 class TextElement
@@ -149,6 +204,7 @@ private:
 
 TextElement fpsCounter;
 TextElement energyCounter;
+TextElement questionText;
 
 class Button
 {
@@ -233,6 +289,10 @@ private:
 };
 
 Button questionButton;
+Button quizButton1;
+Button quizButton2;
+Button quizButton3;
+Button quizButton4;
 
 class World
 {
@@ -408,7 +468,7 @@ void draw_texture_world(Box box, AppData *app, SDL_Texture *texture)
     draw_texture(box, app, texture);
 }
 
-void render_frame(AppData *app)
+void render_game(AppData *app)
 {
     const SDL_Color &bg = app->backgroundColor;
     SDL_SetRenderDrawColor(app->renderer, bg.r, bg.g, bg.b, bg.a);
@@ -497,8 +557,6 @@ void handle_inputs(AppData *app, float deltaTime)
     if (std::abs(movement) > 0)
     {
         app->playerEnergy -= 125 * deltaTime;
-        std::cout << "dt: " << deltaTime
-                  << ", drain: " << 5 * deltaTime << '\n';
         std::stringstream ss;
         ss << "Energy: " << static_cast<uint64_t>(std::round(app->playerEnergy));
         int w;
@@ -568,9 +626,7 @@ void game_tick(AppData *app)
     if (questionButton.pressed)
     {
         app->currentGameState = QUESTIONS;
-        SDL_SetRenderDrawColor(app->renderer, 0, 0, 0, 255);
-        SDL_RenderClear(app->renderer);
-        SDL_RenderPresent(app->renderer);
+        app->currentQuestion = app->activeKit.get_random_question();
         return;
     }
     handle_inputs(app, deltaTime);
@@ -586,14 +642,46 @@ void game_tick(AppData *app)
     app->camX += (app->playerX - app->camX) * 6.5f * deltaTime;
     app->camY += (app->playerY - app->camY) * 6.5f * deltaTime;
     app->camY = std::min(app->camY, app->checkpointY[app->checkpointIndex]);
-    render_frame(app);
+    render_game(app);
+}
+
+void render_quiz(AppData *app)
+{
+    SDL_Color &bg = app->backgroundColor;
+    SDL_SetRenderDrawColor(app->renderer, bg.r, bg.g, bg.b, bg.a);
+    SDL_RenderClear(app->renderer);
+    questionText.render_text();
+    quizButton1.render_button();
+    quizButton2.render_button();
+    quizButton3.render_button();
+    quizButton4.render_button();
+    SDL_RenderPresent(app->renderer);
+}
+
+void quiz_tick(AppData *app)
+{
+    uint64_t currentTick = SDL_GetTicks64();
+    float deltaTime = (currentTick - lastTick) / 1000.0f; // convert to seconds
+    lastTick = currentTick;
+    app->frameTimer += deltaTime;
+
+    quizButton1.update(deltaTime);
+    quizButton2.update(deltaTime);
+    quizButton3.update(deltaTime);
+    quizButton4.update(deltaTime);
+    render_quiz(app);
 }
 
 void shutdown(AppData *app)
 {
     fpsCounter.init(nullptr, nullptr);
     energyCounter.init(nullptr, nullptr);
+    questionText.init(nullptr, nullptr);
     questionButton.cleanup();
+    quizButton1.cleanup();
+    quizButton2.cleanup();
+    quizButton3.cleanup();
+    quizButton4.cleanup();
     SDL_DestroyRenderer(app->renderer);
     SDL_DestroyWindow(app->window);
     TTF_CloseFont(app->font);
@@ -621,8 +709,7 @@ void tick(void *arg)
             return;
         }
         if (event.type == SDL_WINDOWEVENT &&
-            event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED &&
-            app->currentGameState == PLAYING) // reposition the UI elements so it doesn't get cooked
+            event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) // reposition the UI elements so it doesn't get cooked
         {
             std::stringstream ss;
             ss << "Energy: " << app->playerEnergy;
@@ -630,11 +717,23 @@ void tick(void *arg)
             SDL_GetWindowSizeInPixels(app->window, &w, &h);
             energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
             questionButton.set_button("Questions", SDL_Color{255, 255, 255, 255}, 5, h - 68, 200, 63);
+            int centerX = w / 2;
+            int centerY = h / 2 + 100;
+            quizButton1.set_button("Option 1", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY - 105, 200, 100);
+            quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY - 105, 200, 100);
+            quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY + 10, 200, 100);
+            quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY + 10, 200, 100);
         }
     }
-    if (app->currentGameState == PLAYING)
+
+    GameState &state = app->currentGameState;
+    if (state == PLAYING)
     {
         game_tick(app);
+    }
+    else if (state == QUESTIONS)
+    {
+        quiz_tick(app);
     }
 }
 
@@ -656,11 +755,18 @@ int main()
     basicWorld.checkpointsY = {0.325f};
     basicWorld.Load(&app);
 
+    // make a basic kit
+    basicKit.questions = {
+        {"blank1", {"blank", "blank1", "blank1", "blank1"}, {true, true, true, true}},
+        {"blank2", {"blank2", "blank2", "blank2", "blank2"}, {true, true, true, true}}};
+    app.activeKit = basicKit;
+
     // initialize UI
     cursorHand = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
     cursorPointer = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
     fpsCounter.init(app.font, app.renderer);
     energyCounter.init(app.font, app.renderer);
+    questionText.init(app.font, app.renderer);
     std::stringstream ss;
     ss << "Energy: " << app.playerEnergy;
     int w, h;
@@ -668,6 +774,16 @@ int main()
     energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
     questionButton.init(app.font, app.renderer);
     questionButton.set_button("Questions", SDL_Color{255, 255, 255, 255}, 5, h - 68, 200, 63);
+    quizButton1.init(app.font, app.renderer);
+    quizButton2.init(app.font, app.renderer);
+    quizButton3.init(app.font, app.renderer);
+    quizButton4.init(app.font, app.renderer);
+    int centerX = w / 2;
+    int centerY = h / 2 + 100;
+    quizButton1.set_button("Option 1", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY - 105, 200, 100);
+    quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY - 105, 200, 100);
+    quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY + 10, 200, 100);
+    quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY + 10, 200, 100);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
