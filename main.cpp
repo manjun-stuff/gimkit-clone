@@ -70,7 +70,7 @@ public:
     {
         if (this->questions != other.questions)
         {
-            other.questions = this->questions;
+            this->questions = other.questions;
         }
         return *this;
     }
@@ -322,6 +322,25 @@ struct Vector2
     float x;
     float y;
 };
+
+void new_question(AppData *app)
+{
+    Question question = app->activeKit.get_random_question();
+    app->currentQuestion = question;
+    int w, h;
+    SDL_GetWindowSizeInPixels(app->window, &w, &h);
+    int centerX = w / 2;
+    float s = h / 600.f;
+    int centerY = h / 2 + std::round(100 * s);
+    float bw = std::max(50.f, w / 2.f - 15);
+    questionText.set_text(question.question, SDL_Color{255, 255, 255, 255}, centerX, centerY - 3 * std::round(100 * s));
+    SDL_Rect *textRect = questionText.get_rect();
+    textRect->x = centerX - textRect->w / 2;
+    quizButton1.set_button(question.answers.at(0), SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+    quizButton2.set_button(question.answers.at(1), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+    quizButton3.set_button(question.answers.at(2), SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
+    quizButton4.set_button(question.answers.at(3), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
+}
 
 bool aabb_circle(Box box, Vector2 circleCenter, float circleRadius)
 {
@@ -626,7 +645,7 @@ void game_tick(AppData *app)
     if (questionButton.pressed)
     {
         app->currentGameState = QUESTIONS;
-        app->currentQuestion = app->activeKit.get_random_question();
+        new_question(app);
         return;
     }
     handle_inputs(app, deltaTime);
@@ -718,11 +737,17 @@ void tick(void *arg)
             energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
             questionButton.set_button("Questions", SDL_Color{255, 255, 255, 255}, 5, h - 68, 200, 63);
             int centerX = w / 2;
-            int centerY = h / 2 + 100;
-            quizButton1.set_button("Option 1", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY - 105, 200, 100);
-            quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY - 105, 200, 100);
-            quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY + 10, 200, 100);
-            quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY + 10, 200, 100);
+            float s = h / 600.f;
+            int centerY = h / 2 + std::round(100 * s);
+            float bw = std::max(50.f, w / 2.f - 15);
+            Question &question = app->currentQuestion;
+            questionText.set_text(question.question, SDL_Color{255, 255, 255, 255}, centerX, centerY - 3 * std::round(100 * s));
+            SDL_Rect *textRect = questionText.get_rect();
+            textRect->x = centerX - textRect->w / 2;
+            quizButton1.set_button(question.answers.at(0), SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+            quizButton2.set_button(question.answers.at(1), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+            quizButton3.set_button(question.answers.at(2), SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
+            quizButton4.set_button(question.answers.at(3), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
         }
     }
 
@@ -779,11 +804,16 @@ int main()
     quizButton3.init(app.font, app.renderer);
     quizButton4.init(app.font, app.renderer);
     int centerX = w / 2;
-    int centerY = h / 2 + 100;
-    quizButton1.set_button("Option 1", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY - 105, 200, 100);
-    quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY - 105, 200, 100);
-    quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - 205, centerY + 10, 200, 100);
-    quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + 10, centerY + 10, 200, 100);
+    float s = h / 600.f;
+    int centerY = h / 2 + std::round(100 * s);
+    float bw = std::max(50.f, w / 2.f - 15);
+    questionText.set_text("Question", SDL_Color{255, 255, 255, 255}, centerX, centerY - 3 * std::round(100 * s));
+    SDL_Rect *textRect = questionText.get_rect();
+    textRect->x = centerX - textRect->w / 2;
+    quizButton1.set_button("Option 1", SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+    quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
+    quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
+    quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);
