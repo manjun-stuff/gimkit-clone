@@ -692,6 +692,7 @@ void render_quiz(AppData *app)
     quizButton2.render_button();
     quizButton3.render_button();
     quizButton4.render_button();
+    quitQuizButton.render_button();
     SDL_RenderPresent(app->renderer);
 }
 
@@ -725,6 +726,16 @@ void quiz_tick(AppData *app)
     {
         app->playerEnergy += 1500;
         new_question(app);
+    }
+    quitQuizButton.update(deltaTime, app);
+    if (quitQuizButton.pressed)
+    {
+        app->currentGameState = PLAYING;
+        int w, h;
+        SDL_GetWindowSizeInPixels(app->window, &w, &h);
+        std::stringstream ss;
+        ss << "Energy: " << app->playerEnergy;
+        energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
     }
     render_quiz(app);
 }
@@ -787,7 +798,7 @@ void tick(void *arg)
             quizButton2.set_button(question.answers.at(app->indices.at(1)), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
             quizButton3.set_button(question.answers.at(app->indices.at(2)), SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
             quizButton4.set_button(question.answers.at(app->indices.at(3)), SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
-            // quitQuizButton.set_button("x", SDL_Color{255, 255, 255, 255}, )
+            quitQuizButton.set_button("x", SDL_Color{255, 255, 255, 255}, w - 65, 25, 40, 40);
         }
     }
 
@@ -863,6 +874,7 @@ int main()
     quizButton2.init(app.font, app.renderer);
     quizButton3.init(app.font, app.renderer);
     quizButton4.init(app.font, app.renderer);
+    quitQuizButton.init(app.font, app.renderer);
     int centerX = w / 2;
     float s = h / 600.f;
     int centerY = h / 2 + std::round(100 * s);
@@ -874,6 +886,7 @@ int main()
     quizButton2.set_button("Option 2", SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY - std::round(105 * s), std::round(bw), std::round(100 * s));
     quizButton3.set_button("Option 3", SDL_Color{255, 255, 255, 255}, centerX - std::round((5 + bw)), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
     quizButton4.set_button("Option 4", SDL_Color{255, 255, 255, 255}, centerX + std::round(10 * s), centerY + std::round(10 * s), std::round(bw), std::round(100 * s));
+    quitQuizButton.set_button("x", SDL_Color{255, 255, 255, 255}, w - 65, 25, 40, 40);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(tick, &app, 0, true);

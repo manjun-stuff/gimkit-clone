@@ -76,7 +76,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpuuw_0c93.js
+// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpjs5byl1_.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -203,21 +203,21 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
   })();
 
-// end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpuuw_0c93.js
-// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpr32bgyjv.js
+// end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpjs5byl1_.js
+// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpsalyikzv.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpr32bgyjv.js
-// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmp7y8wud8a.js
+  // end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmpsalyikzv.js
+// include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmp_5z28elx.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmp7y8wud8a.js
+  // end include: /var/folders/10/scllr7j1477cg0ntn6p7zkm00000gn/T/tmp_5z28elx.js
 
 
 var programArgs = [];
