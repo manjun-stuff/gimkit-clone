@@ -734,7 +734,7 @@ void quiz_tick(AppData *app)
         int w, h;
         SDL_GetWindowSizeInPixels(app->window, &w, &h);
         std::stringstream ss;
-        ss << "Energy: " << app->playerEnergy;
+        ss << "Energy: " << std::round(app->playerEnergy);
         energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
     }
     render_quiz(app);
