@@ -706,25 +706,25 @@ void quiz_tick(AppData *app)
     quizButton1.update(deltaTime, app);
     if (quizButton1.pressed && app->currentQuestion.correct.at(app->indices.at(0)))
     {
-        app->playerEnergy += 1500;
+        app->playerEnergy += 500;
         new_question(app);
     }
     quizButton2.update(deltaTime, app);
     if (quizButton2.pressed && app->currentQuestion.correct.at(app->indices.at(1)))
     {
-        app->playerEnergy += 1500;
+        app->playerEnergy += 500;
         new_question(app);
     }
     quizButton3.update(deltaTime, app);
     if (quizButton3.pressed && app->currentQuestion.correct.at(app->indices.at(2)))
     {
-        app->playerEnergy += 1500;
+        app->playerEnergy += 500;
         new_question(app);
     }
     quizButton4.update(deltaTime, app);
     if (quizButton4.pressed && app->currentQuestion.correct.at(app->indices.at(3)))
     {
-        app->playerEnergy += 1500;
+        app->playerEnergy += 500;
         new_question(app);
     }
     quitQuizButton.update(deltaTime, app);
@@ -781,7 +781,7 @@ void tick(void *arg)
             event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) // reposition the UI elements so it doesn't get cooked
         {
             std::stringstream ss;
-            ss << "Energy: " << app->playerEnergy;
+            ss << "Energy: " << std::round(std::max(0.f, app->playerEnergy));
             int w, h;
             SDL_GetWindowSizeInPixels(app->window, &w, &h);
             energyCounter.set_text_right(ss.str(), SDL_Color{255, 255, 255, 255}, w, 5);
