@@ -582,7 +582,7 @@ void run_physics(AppData *app, float deltaTime)
 
 void handle_inputs(AppData *app, float deltaTime)
 {
-    if (app->playerEnergy < 1)
+    if (std::round(app->playerEnergy) < 1)
         return;
     const uint8_t *keystate = SDL_GetKeyboardState(nullptr);
 
@@ -592,7 +592,7 @@ void handle_inputs(AppData *app, float deltaTime)
     app->velocityX += movement;
     if (std::abs(movement) > 0)
     {
-        app->playerEnergy -= 125 * deltaTime;
+        app->playerEnergy -= 75 * deltaTime;
         std::stringstream ss;
         ss << "Energy: " << static_cast<uint64_t>(std::max(0.0f, std::round(app->playerEnergy)));
         int w;
